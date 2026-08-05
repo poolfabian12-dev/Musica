@@ -32,6 +32,7 @@ fun ProfileScreen(
     downloadCount: Int,
     notifications: List<NotificationEntity>,
     autoLoginCount: Int = 1,
+    firebaseSyncStatus: String = "Firebase Conectado",
     onLoginAsRole: (email: String, name: String, role: String) -> Unit,
     onLogout: () -> Unit,
     onMarkNotificationRead: (String) -> Unit,
@@ -234,6 +235,77 @@ fun ProfileScreen(
                         )
                     )
                     Text("Descargadas", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+
+        // Cloud Infrastructure Card (Firebase & Cloudinary)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudSync,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sincronización en la Nube",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Proyecto Firebase:",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    Text(
+                        text = "musica-cristiana-70c1e",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Estado:",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    Text(
+                        text = firebaseSyncStatus,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Almacenamiento Multimedia:",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                    Text(
+                        text = "Cloudinary (Audios & Portadas)",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
                 }
             }
         }

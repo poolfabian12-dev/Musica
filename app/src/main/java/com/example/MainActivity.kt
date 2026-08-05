@@ -69,6 +69,7 @@ fun MainAppContent(viewModel: MainViewModel) {
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val youtubeState by viewModel.youtubeState.collectAsStateWithLifecycle()
     val userMessage by viewModel.userMessage.collectAsStateWithLifecycle()
+    val firebaseSyncStatus by viewModel.firebaseSyncStatus.collectAsStateWithLifecycle()
 
     // Player State
     val currentSong by viewModel.playerManager.currentSong.collectAsStateWithLifecycle()
@@ -226,6 +227,7 @@ fun MainAppContent(viewModel: MainViewModel) {
                         downloadCount = downloadedSongs.size,
                         notifications = notifications,
                         autoLoginCount = autoLoginCount,
+                        firebaseSyncStatus = firebaseSyncStatus,
                         onLoginAsRole = { email, name, role -> viewModel.login(email, name, role) },
                         onLogout = { viewModel.logout() },
                         onMarkNotificationRead = { id -> viewModel.markNotificationRead(id) },

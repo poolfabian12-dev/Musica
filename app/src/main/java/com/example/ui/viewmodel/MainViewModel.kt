@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.api.YoutubeAudioConverter
 import com.example.data.local.NotificationEntity
 import com.example.data.local.SongEntity
 import com.example.data.local.SuggestionEntity
@@ -16,8 +17,14 @@ import java.util.UUID
 
 sealed class YoutubeConversionState {
     object Idle : YoutubeConversionState()
-    data class Processing(val progressPercent: Int) : YoutubeConversionState()
-    data class Success(val mp3Url: String, val title: String, val artist: String) : YoutubeConversionState()
+    data class Processing(val progressPercent: Int, val statusText: String = "Procesando...") : YoutubeConversionState()
+    data class Success(
+        val mp3Url: String,
+        val coverUrl: String,
+        val title: String,
+        val artist: String,
+        val durationSeconds: Int = 210
+    ) : YoutubeConversionState()
     data class Error(val message: String) : YoutubeConversionState()
 }
 
@@ -25,12 +32,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = MusicRepository(application)
     val playerManager = AudioPlayerManager(application)
+    val youtubeConverter = YoutubeAudioConverter(application)
 
     // Auth & User Role State
     val currentUser: StateFlow<UserEntity?> = repository.currentUser
     val needsReverification: StateFlow<Boolean> = repository.needsReverification
     val autoLoginCount: StateFlow<Int> = repository.autoLoginCount
     val savedUserForReverification: StateFlow<UserEntity?> = repository.savedUserForReverification
+    val firebaseSyncStatus: StateFlow<String> = repository.firebaseSyncStatus
 
     // Database Flows
     val allSongs: StateFlow<List<SongEntity>> = repository.allSongs.stateIn(
@@ -226,21 +235,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch {
-            _youtubeState.value = YoutubeConversionState.Processing(10)
-            delay(800)
-            _youtubeState.value = YoutubeConversionState.Processing(45)
-            delay(1000)
-            _youtubeState.value = YoutubeConversionState.Processing(85)
-            delay(800)
-
-            // Extracted sample audio stream from Cloudinary/Sound Helix
-            val convertedMp3 = "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3"
-            _youtubeState.value = YoutubeConversionState.Success(
-                mp3Url = convertedMp3,
-                title = "Alabanza Extraída de YouTube",
-                artist = "Ministerio Vivo"
+            _youtubeState.value = YoutubeConversionState.Processing(15, "Obteniendo datos del video...")
+            val result = youtubeConverter.convertAndUploadToCloudinary(
+                youtubeUrl = url,
+                onProgress = { progressText ->
+                    val percent = when {
+                        progressText.startsWith("1") -> 25
+                        progressText.startsWith("2") -> 50
+                        progressText.startsWith("3") -> 75
+                        progressText.startsWith("4") -> 90
+                        else -> 80
+                    }
+                    _youtubeState.value = YoutubeConversionState.Processing(percent, progressText)
+                }
             )
-            _userMessage.value = "¡Conversión de YouTube completada con éxito!"
+
+            if (result.isSuccess) {
+                val res = result.getOrThrow()
+                _youtubeState.value = YoutubeConversionState.Success(
+                    mp3Url = res.cloudinaryAudioUrl,
+                    coverUrl = res.cloudinaryCoverUrl,
+                    title = res.title,
+                    artist = res.artist,
+                    durationSeconds = res.durationSeconds
+                )
+                _userMessage.value = "¡Video convertido a MP3 y subido a Cloudinary!"
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Error desconocido en la conversión"
+                _youtubeState.value = YoutubeConversionState.Error(err)
+                _userMessage.value = "Error al convertir: $err"
+            }
         }
     }
 

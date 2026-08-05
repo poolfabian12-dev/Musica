@@ -194,8 +194,9 @@ fun FullScreenPlayerDialog(
 
                         // Seek Slider & Time Labels
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            val posFloat = currentPositionMs.toFloat()
-                            val durFloat = durationMs.coerceAtLeast(1L).toFloat()
+                            val effectiveDuration = if (durationMs > 1000L) durationMs else ((song.durationSeconds * 1000L).coerceAtLeast(60000L))
+                            val posFloat = currentPositionMs.toFloat().coerceIn(0f, effectiveDuration.toFloat())
+                            val durFloat = effectiveDuration.toFloat()
                             var sliderValue by remember(posFloat) { mutableStateOf(posFloat) }
 
                             Slider(
@@ -218,7 +219,7 @@ fun FullScreenPlayerDialog(
                                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                                 Text(
-                                    text = formatMs(durationMs),
+                                    text = formatMs(effectiveDuration),
                                     style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                             }
