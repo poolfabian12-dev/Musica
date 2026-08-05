@@ -31,14 +31,17 @@ fun ProfileScreen(
     favoriteCount: Int,
     downloadCount: Int,
     notifications: List<NotificationEntity>,
+    autoLoginCount: Int = 1,
     onLoginAsRole: (email: String, name: String, role: String) -> Unit,
     onLogout: () -> Unit,
     onMarkNotificationRead: (String) -> Unit,
+    onOpenAuth: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showNotificationsDialog by remember { mutableStateOf(false) }
     var notificationsEnabled by remember { mutableStateOf(true) }
 
+    val isGuest = currentUser?.role == "guest"
     val isAdmin = currentUser?.role == "admin"
 
     Column(
@@ -71,14 +74,14 @@ fun ProfileScreen(
             ) {
                 Surface(
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = if (isGuest) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(80.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
-                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else Icons.Default.Person,
+                            imageVector = if (isAdmin) Icons.Default.AdminPanelSettings else if (isGuest) Icons.Default.Visibility else Icons.Default.Person,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = if (isGuest) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(48.dp)
                         )
                     }
@@ -87,36 +90,112 @@ fun ProfileScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = currentUser?.name ?: "Hermano(a) Creyente",
+                    text = currentUser?.name ?: (if (isGuest) "Invitado (Modo Explorador)" else "Hermano(a) Creyente"),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
 
                 Text(
-                    text = currentUser?.email ?: "usuario@cristiano.org",
+                    text = if (isGuest) "Modo lectura sin registro" else (currentUser?.email ?: "usuario@cristiano.org"),
                     style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Surface(
-                    color = if (isAdmin) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                    color = if (isAdmin) MaterialTheme.colorScheme.primaryContainer else if (isGuest) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer,
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
-                        text = if (isAdmin) "ROL: ADMINISTRADOR (poolfabian12@gmail.com)" else "ROL: USUARIO GENERAL",
+                        text = if (isAdmin) "ROL: ADMINISTRADOR (poolfabian12@gmail.com)" else if (isGuest) "ROL: INVITADO TEMPORAL" else "ROL: USUARIO REGISTRADO",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = if (isAdmin) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
+                            color = if (isAdmin) MaterialTheme.colorScheme.onPrimaryContainer else if (isGuest) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer
                         ),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                     )
                 }
+
+                if (!isGuest) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Auto-Login Status Bar
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Auto-Ingreso Activo",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = "Acceso $autoLoginCount de 20",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = (autoLoginCount.coerceIn(0, 20).toFloat() / 20f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Al llegar a 20 ingresos continuos se te pedirá confirmar tu contraseña por seguridad.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         }
 
-
-
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (isGuest) {
+            // Guest Card Upgrade Banner
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "🚀 Beneficios de Crear tu Cuenta Gratis:",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("✓ Descargas de música en MP3 para escuchar offline", style = MaterialTheme.typography.bodySmall)
+                    Text("✓ Guardar tus alabanzas y canciones en Favoritos", style = MaterialTheme.typography.bodySmall)
+                    Text("✓ Crear listas de reproducción personalizadas", style = MaterialTheme.typography.bodySmall)
+                    Text("✓ Sugerir canciones al Administrador", style = MaterialTheme.typography.bodySmall)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = onLogout,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.PersonAdd, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Crear Cuenta / Iniciar Sesión", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         // Personal Stats Row
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

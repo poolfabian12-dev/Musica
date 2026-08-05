@@ -2,28 +2,28 @@ package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.MusicNote
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.Phone
-import androidx.compose.material.icons.outlined.Security
-import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -35,14 +35,16 @@ import kotlinx.coroutines.delay
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoginScreen(
-    onLoginSuccess: (email: String, name: String, role: String) -> Unit,
+    onLoginSuccess: (email: String, name: String, role: String, password: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var authType by remember { mutableStateOf("email") } // "email", "phone", "facebook"
-    var isRegisterMode by remember { mutableStateOf(false) }
+    // Selected Tab: 0 = Iniciar Sesión, 1 = Registrarse, 2 = Teléfono (SMS)
+    var selectedTab by remember { mutableIntStateOf(0) }
 
+    // Form inputs
     var emailInput by remember { mutableStateOf("") }
     var passwordInput by remember { mutableStateOf("") }
+    var confirmPasswordInput by remember { mutableStateOf("") }
     var nameInput by remember { mutableStateOf("") }
     var phoneInput by remember { mutableStateOf("") }
     var otpCodeInput by remember { mutableStateOf("") }
@@ -53,7 +55,6 @@ fun LoginScreen(
     var smsRequestsCount by remember { mutableIntStateOf(0) }
     var smsCooldownSeconds by remember { mutableIntStateOf(0) }
     var otpFailedAttempts by remember { mutableIntStateOf(0) }
-    var simulatedGeneratedOtp by remember { mutableStateOf("123456") }
 
     // Cooldown countdown timer effect
     LaunchedEffect(smsCooldownSeconds) {
@@ -64,11 +65,12 @@ fun LoginScreen(
     }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
 
     val backgroundBrush = Brush.verticalGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
-            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            MaterialTheme.colorScheme.surface,
             MaterialTheme.colorScheme.background
         )
     )
@@ -83,40 +85,43 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .widthIn(max = 480.dp)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // App Icon & Header
+            // Glowing App Icon & Header
             Surface(
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.primary,
+                shadowElevation = 8.dp,
                 modifier = Modifier.size(80.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Outlined.MusicNote,
-                        contentDescription = null,
+                        contentDescription = "Logo",
                         tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(44.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 text = "Música Cristiana",
                 style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp
                 ),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
 
             Text(
-                text = "Alabanzas, Adoración y Letras Edificantes",
+                text = "Alabanza, Adoración, Letras y Descargas Offline",
                 style = MaterialTheme.typography.bodyMedium.copy(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 ),
@@ -124,29 +129,101 @@ fun LoginScreen(
                 modifier = Modifier.padding(horizontal = 16.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // Auth Form Card
+            // Main Authentication Card
             Card(
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier.padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = when (authType) {
-                            "phone" -> "Inicio con Teléfono (SMS)"
-                            else -> if (isRegisterMode) "Crear Cuenta" else "Iniciar Sesión"
-                        },
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    // Segmented Tabs Header
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Tab 0: Iniciar Sesión
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (selectedTab == 0) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedTab = 0
+                                        errorMessage = null
+                                        successMessage = null
+                                    }
+                            ) {
+                                Text(
+                                    text = "Ingresar",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (selectedTab == 0) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 10.dp)
+                                )
+                            }
+
+                            // Tab 1: Registrarse
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (selectedTab == 1) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedTab = 1
+                                        errorMessage = null
+                                        successMessage = null
+                                    }
+                            ) {
+                                Text(
+                                    text = "Registro",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (selectedTab == 1) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 10.dp)
+                                )
+                            }
+
+                            // Tab 2: Teléfono / SMS
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (selectedTab == 2) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        selectedTab = 2
+                                        errorMessage = null
+                                        successMessage = null
+                                    }
+                            ) {
+                                Text(
+                                    text = "Por SMS",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (selectedTab == 2) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(vertical = 10.dp)
+                                )
+                            }
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    // Feedback Messages
                     if (errorMessage != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.errorContainer,
@@ -155,44 +232,68 @@ fun LoginScreen(
                                 .fillMaxWidth()
                                 .padding(bottom = 12.dp)
                         ) {
-                            Text(
-                                text = errorMessage!!,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
-                                    fontWeight = FontWeight.Medium
-                                ),
+                            Row(
                                 modifier = Modifier.padding(12.dp),
-                                textAlign = TextAlign.Center
-                            )
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = errorMessage!!,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                )
+                            }
                         }
                     }
 
-                    if (authType == "email") {
-                        // Name Input (Only on Register)
-                        AnimatedVisibility(visible = isRegisterMode) {
-                            Column {
-                                OutlinedTextField(
-                                    value = nameInput,
-                                    onValueChange = { nameInput = it },
-                                    label = { Text("Nombre Completo") },
-                                    leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .testTag("input_register_name")
+                    if (successMessage != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircleOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = successMessage!!,
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                )
                             }
                         }
+                    }
 
-                        // Email or Username Input
+                    // TAB 0: INICIAR SESIÓN (Correo / Usuario)
+                    if (selectedTab == 0) {
                         OutlinedTextField(
                             value = emailInput,
                             onValueChange = { emailInput = it },
                             label = { Text("Correo o Usuario") },
-                            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                            placeholder = { Text("ejemplo@cristiano.org") },
+                            leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_email")
@@ -200,7 +301,6 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Password Input
                         OutlinedTextField(
                             value = passwordInput,
                             onValueChange = { passwordInput = it },
@@ -216,48 +316,63 @@ fun LoginScreen(
                             },
                             singleLine = true,
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .testTag("input_password")
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        // Submit Email Auth Button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "✨ Auto-ingreso activo (hasta 20 veces)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+
+                            // Quick fill for Admin
+                            TextButton(
+                                onClick = {
+                                    emailInput = "poolfabian12@gmail.com"
+                                    passwordInput = "admin123"
+                                },
+                                contentPadding = PaddingValues(horizontal = 6.dp)
+                            ) {
+                                Text("Probar Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
                         Button(
                             onClick = {
                                 errorMessage = null
-                                val userInput = emailInput.trim()
+                                val userStr = emailInput.trim()
                                 val pwd = passwordInput.trim()
 
-                                if (userInput.isBlank() || pwd.isBlank()) {
-                                    errorMessage = "Por favor ingresa tu correo/usuario y contraseña."
+                                if (userStr.isBlank() || pwd.isBlank()) {
+                                    errorMessage = "Ingresa tu correo/usuario y contraseña."
                                     return@Button
                                 }
 
-                                val isAdminAccount = (userInput.equals("admin", ignoreCase = true) || userInput.equals("poolfabian12@gmail.com", ignoreCase = true)) && pwd == "admin123"
+                                val isAdmin = (userStr.equals("admin", ignoreCase = true) || userStr.equals("poolfabian12@gmail.com", ignoreCase = true)) && pwd == "admin123"
 
-                                if (isAdminAccount) {
+                                if (isAdmin) {
                                     onLoginSuccess(
                                         "poolfabian12@gmail.com",
                                         "Administrador Principal",
-                                        "admin"
-                                    )
-                                } else if (!isRegisterMode) {
-                                    val displayName = userInput.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
-                                    onLoginSuccess(
-                                        if (userInput.contains("@")) userInput else "$userInput@cristiano.org",
-                                        displayName,
-                                        "user"
+                                        "admin",
+                                        pwd
                                     )
                                 } else {
-                                    val displayName = if (nameInput.isNotBlank()) nameInput.trim() else userInput.substringBefore("@")
-                                    onLoginSuccess(
-                                        if (userInput.contains("@")) userInput else "$userInput@cristiano.org",
-                                        displayName,
-                                        "user"
-                                    )
+                                    val displayName = userStr.substringBefore("@").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+                                    val finalEmail = if (userStr.contains("@")) userStr else "$userStr@cristiano.org"
+                                    onLoginSuccess(finalEmail, displayName, "user", pwd)
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
@@ -266,66 +381,131 @@ fun LoginScreen(
                                 .height(50.dp)
                                 .testTag("button_submit_auth")
                         ) {
-                            Text(
-                                text = if (isRegisterMode) "CREAR CUENTA" else "INICIAR SESIÓN",
-                                fontWeight = FontWeight.Bold
-                            )
+                            Icon(Icons.Default.Login, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("INICIAR SESIÓN", fontWeight = FontWeight.Bold)
                         }
+                    }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                    // TAB 1: REGISTRO NUEVO
+                    else if (selectedTab == 1) {
+                        OutlinedTextField(
+                            value = nameInput,
+                            onValueChange = { nameInput = it },
+                            label = { Text("Nombre Completo") },
+                            placeholder = { Text("Hermano David") },
+                            leadingIcon = { Icon(Icons.Outlined.Person, contentDescription = null) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("input_register_name")
+                        )
 
-                        TextButton(
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = emailInput,
+                            onValueChange = { emailInput = it },
+                            label = { Text("Correo Electrónico") },
+                            placeholder = { Text("tu_correo@ejemplo.com") },
+                            leadingIcon = { Icon(Icons.Outlined.Email, contentDescription = null) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = passwordInput,
+                            onValueChange = { passwordInput = it },
+                            label = { Text("Crear Contraseña (mínimo 4 caracteres)") },
+                            leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null) },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
+                            singleLine = true,
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
                             onClick = {
-                                isRegisterMode = !isRegisterMode
                                 errorMessage = null
-                            }
-                        ) {
-                            Text(
-                                text = if (isRegisterMode) "¿Ya tienes cuenta? Inicia Sesión" else "¿No tienes cuenta? Regístrate aquí",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
+                                val name = nameInput.trim()
+                                val email = emailInput.trim()
+                                val pwd = passwordInput.trim()
 
-                    } else if (authType == "phone") {
-                        // Phone Auth Form with Anti-Abuse and Quota Controls
+                                if (name.isBlank() || email.isBlank() || pwd.isBlank()) {
+                                    errorMessage = "Por favor completa todos los campos para crear tu cuenta."
+                                    return@Button
+                                }
+                                if (pwd.length < 4) {
+                                    errorMessage = "La contraseña debe tener al menos 4 caracteres."
+                                    return@Button
+                                }
+
+                                val finalEmail = if (email.contains("@")) email else "$email@cristiano.org"
+                                onLoginSuccess(finalEmail, name, "user", pwd)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                        ) {
+                            Icon(Icons.Default.PersonAdd, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("CREAR MI CUENTA", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // TAB 2: TELÉFONO CON PROTECCIÓN SMS
+                    else if (selectedTab == 2) {
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 16.dp)
+                                .padding(bottom = 12.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(12.dp),
+                                modifier = Modifier.padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
                                     imageVector = Icons.Outlined.Security,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Column {
                                     Text(
-                                        text = "Protección de Cuota SMS (Máx 3 envíos)",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        text = "Protección SMS: Máximo 3 envíos por sesión",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                         color = MaterialTheme.colorScheme.onPrimaryContainer
                                     )
                                     Text(
-                                        text = "Envíos usados en esta sesión: $smsRequestsCount de 3",
-                                        style = MaterialTheme.typography.bodySmall,
+                                        text = "Usados: $smsRequestsCount / 3",
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                     )
                                 }
                             }
                         }
 
-                        // Phone Number Input
                         OutlinedTextField(
                             value = phoneInput,
                             onValueChange = { input ->
-                                // Keep only valid phone characters: digits, spaces, +
                                 if (input.all { it.isDigit() || it == '+' || it == ' ' || it == '-' }) {
                                     phoneInput = input
                                 }
@@ -340,20 +520,20 @@ fun LoginScreen(
                         )
 
                         if (isOtpSent) {
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                color = MaterialTheme.colorScheme.surface,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
                                         text = "Código de 6 dígitos enviado a $phoneInput",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     OutlinedTextField(
                                         value = otpCodeInput,
                                         onValueChange = {
@@ -368,18 +548,17 @@ fun LoginScreen(
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         modifier = Modifier.fillMaxWidth()
                                     )
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Intentos de verificación restantes: ${3 - otpFailedAttempts}",
+                                        text = "Intentos restantes: ${3 - otpFailedAttempts}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (otpFailedAttempts >= 2) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                            // Resend with Cooldown Timer
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -388,28 +567,26 @@ fun LoginScreen(
                                 TextButton(
                                     onClick = {
                                         if (smsRequestsCount >= 3) {
-                                            errorMessage = "Has alcanzado el límite de 3 envíos SMS. Intenta con correo o como invitado."
+                                            errorMessage = "Límite de 3 envíos SMS alcanzado."
                                             return@TextButton
                                         }
                                         if (smsCooldownSeconds > 0) {
-                                            errorMessage = "Espera $smsCooldownSeconds segundos antes de solicitar otro SMS."
+                                            errorMessage = "Espera $smsCooldownSeconds segundos."
                                             return@TextButton
                                         }
                                         smsRequestsCount += 1
                                         smsCooldownSeconds = 60
                                         otpCodeInput = ""
-                                        errorMessage = "Nuevo SMS enviado con éxito."
+                                        successMessage = "Nuevo código SMS enviado."
                                     },
                                     enabled = smsCooldownSeconds == 0 && smsRequestsCount < 3
                                 ) {
                                     if (smsCooldownSeconds > 0) {
-                                        Icon(Icons.Outlined.Timer, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Outlined.Timer, contentDescription = null, modifier = Modifier.size(14.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Reenviar en ${smsCooldownSeconds}s", fontSize = 12.sp)
-                                    } else if (smsRequestsCount >= 3) {
-                                        Text("Límite de SMS alcanzado", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                                        Text("Reenviar (${smsCooldownSeconds}s)", fontSize = 11.sp)
                                     } else {
-                                        Text("¿No llegó? Reenviar SMS", fontSize = 12.sp)
+                                        Text("Reenviar SMS", fontSize = 11.sp)
                                     }
                                 }
 
@@ -421,65 +598,56 @@ fun LoginScreen(
                                         errorMessage = null
                                     }
                                 ) {
-                                    Text("Cambiar número", fontSize = 12.sp)
+                                    Text("Cambiar número", fontSize = 11.sp)
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        // Submit Button
                         Button(
                             onClick = {
                                 errorMessage = null
                                 val cleanPhone = phoneInput.trim().replace(" ", "").replace("-", "")
 
                                 if (cleanPhone.length < 8) {
-                                    errorMessage = "Por favor ingresa un número de teléfono válido (ej: +51987654321)."
+                                    errorMessage = "Ingresa un número de teléfono válido con código de país."
                                     return@Button
                                 }
 
                                 if (!isOtpSent) {
                                     if (smsRequestsCount >= 3) {
-                                        errorMessage = "Límite de seguridad alcanzado (3/3 envíos). Por favor inicia sesión con correo o continúa como invitado."
+                                        errorMessage = "Límite de envíos SMS alcanzado. Inicia con correo o invitado."
                                         return@Button
                                     }
-                                    // Send SMS & start 60s cooldown
                                     isOtpSent = true
                                     smsRequestsCount += 1
                                     smsCooldownSeconds = 60
                                     otpFailedAttempts = 0
-                                    errorMessage = null
+                                    successMessage = "Código de verificación enviado."
                                 } else {
-                                    // Verification phase
                                     val code = otpCodeInput.trim()
                                     if (code.length < 4) {
-                                        errorMessage = "Ingresa el código SMS de verificación completo (4 a 6 dígitos)."
+                                        errorMessage = "Ingresa el código SMS de 6 dígitos."
                                         return@Button
                                     }
-
-                                    // Check max verification attempts
                                     if (otpFailedAttempts >= 3) {
-                                        errorMessage = "Demasiados intentos fallidos de código. Por seguridad, solicita un nuevo SMS o usa correo."
+                                        errorMessage = "Intentos agotados. Solicita un nuevo código."
                                         return@Button
                                     }
 
-                                    // Validate OTP code (accepts testing code 123456 or standard valid verification)
-                                    val isValidOtp = code == "123456" || code.length == 6 || cleanPhone.contains("9999")
-                                    if (isValidOtp) {
+                                    val isValid = code == "123456" || code.length == 6 || cleanPhone.contains("9999")
+                                    if (isValid) {
                                         val phoneLastDigits = cleanPhone.takeLast(4)
                                         onLoginSuccess(
                                             "$cleanPhone@phone.com",
-                                            "Usuario Teléfono ($phoneLastDigits)",
-                                            "user"
+                                            "Usuario Móvil ($phoneLastDigits)",
+                                            "user",
+                                            code
                                         )
                                     } else {
                                         otpFailedAttempts += 1
-                                        if (otpFailedAttempts >= 3) {
-                                            errorMessage = "Código incorrecto. Se agotaron los 3 intentos. Solicita un nuevo código."
-                                        } else {
-                                            errorMessage = "Código incorrecto. Te quedan ${3 - otpFailedAttempts} intentos."
-                                        }
+                                        errorMessage = "Código incorrecto (${3 - otpFailedAttempts} intentos restantes)."
                                     }
                                 }
                             },
@@ -490,106 +658,96 @@ fun LoginScreen(
                                 .height(50.dp)
                         ) {
                             Text(
-                                text = if (!isOtpSent) {
-                                    if (smsRequestsCount >= 3) "LÍMITE DE SMS ALCANZADO" else "ENVIAR CÓDIGO SMS"
-                                } else "VERIFICAR E INICIAR SESIÓN",
+                                text = if (!isOtpSent) "ENVIAR CÓDIGO SMS" else "VERIFICAR E INGRESAR",
                                 fontWeight = FontWeight.Bold
                             )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        TextButton(
-                            onClick = {
-                                authType = "email"
-                                errorMessage = null
-                            }
-                        ) {
-                            Text("Volver a Ingreso por Correo")
                         }
                     }
 
                     Divider(modifier = Modifier.padding(vertical = 16.dp))
 
+                    // Social & Guest Section Header
                     Text(
-                        text = "Otras opciones de ingreso",
-                        style = MaterialTheme.typography.labelMedium,
+                        text = "Acceso Rápido & Modos de Prueba",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                    // Facebook Login Button
-                    Button(
-                        onClick = {
-                            onLoginSuccess("facebook_user@facebook.com", "Usuario Facebook", "user")
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
-                        shape = RoundedCornerShape(12.dp),
+                    // Distinctive Guest Card Button
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .clickable {
+                                onLoginSuccess("invitado@cristiano.org", "Invitado", "guest", "")
+                            }
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = "f ",
-                                fontWeight = FontWeight.Black,
-                                style = MaterialTheme.typography.titleLarge
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSecondary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Continuar como Invitado (Modo Explorador)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = "Escucha y lee letras sin necesidad de registro",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Continuar con Facebook", fontWeight = FontWeight.SemiBold)
                         }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Phone Auth Button (if in email mode)
-                    if (authType != "phone") {
-                        OutlinedButton(
-                            onClick = {
-                                authType = "phone"
-                                errorMessage = null
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Icon(Icons.Outlined.Phone, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Ingresar con Número de Teléfono")
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-
-                    // Anonymous / Guest Button
-                    FilledTonalButton(
+                    // Facebook Login Button
+                    Button(
                         onClick = {
-                            onLoginSuccess("invitado@cristiano.org", "Invitado", "guest")
+                            onLoginSuccess("facebook_user@facebook.com", "Hermano de Facebook", "user", "fb123")
                         },
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer
-                        ),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1877F2)),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(44.dp)
                     ) {
-                        Icon(Icons.Default.AccountCircle, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Ingresar como Invitado (Modo Lectura)", fontWeight = FontWeight.Medium)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "f ",
+                                fontWeight = FontWeight.Black,
+                                style = MaterialTheme.typography.titleMedium
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Continuar con Facebook", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = " Nota: El usuario invitado puede escuchar canciones y ver letras, pero no puede descargar ni guardar favoritos.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 8.dp)
-                    )
                 }
             }
 
@@ -597,4 +755,3 @@ fun LoginScreen(
         }
     }
 }
-

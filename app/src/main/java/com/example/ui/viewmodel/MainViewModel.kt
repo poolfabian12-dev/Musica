@@ -28,6 +28,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Auth & User Role State
     val currentUser: StateFlow<UserEntity?> = repository.currentUser
+    val needsReverification: StateFlow<Boolean> = repository.needsReverification
+    val autoLoginCount: StateFlow<Int> = repository.autoLoginCount
+    val savedUserForReverification: StateFlow<UserEntity?> = repository.savedUserForReverification
 
     // Database Flows
     val allSongs: StateFlow<List<SongEntity>> = repository.allSongs.stateIn(
@@ -267,11 +270,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Authentication & Session
-    fun login(email: String, name: String, role: String) {
+    fun login(email: String, name: String, role: String, password: String = "") {
         viewModelScope.launch {
-            repository.loginUser(email, name, role)
+            repository.loginUser(email, name, role, password)
             _userMessage.value = if (role == "admin") "Bienvenido Administrador" else "Bienvenido $name"
         }
+    }
+
+    fun verifyIdentity(password: String): Boolean {
+        val success = repository.verifyIdentityAndRenew(password)
+        if (success) {
+            _userMessage.value = "Identidad confirmada. ¡Bienvenido de vuelta!"
+        } else {
+            _userMessage.value = "Contraseña incorrecta. Inténtalo de nuevo."
+        }
+        return success
+    }
+
+    fun switchUser() {
+        repository.dismissReverificationAndSwitchUser()
+        _userMessage.value = "Sesión cerrada"
     }
 
     fun logout() {

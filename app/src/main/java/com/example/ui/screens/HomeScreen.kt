@@ -40,11 +40,13 @@ fun HomeScreen(
     currentPlayingSong: SongEntity?,
     isPlaying: Boolean,
     unreadNotificationsCount: Int,
+    isGuest: Boolean = false,
     onSongSelect: (SongEntity) -> Unit,
     onToggleFavorite: (SongEntity) -> Unit,
     onDownloadSong: (SongEntity) -> Unit,
     onOpenSuggestDialog: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenAuth: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedGenreChip by remember { mutableStateOf("Todos") }
@@ -95,9 +97,10 @@ fun HomeScreen(
                         )
                     )
                     Text(
-                        text = "Alabanza & Adoración",
+                        text = if (isGuest) "Modo Invitado Activo" else "Alabanza & Adoración",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (isGuest) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = if (isGuest) FontWeight.Bold else FontWeight.Normal
                         )
                     )
                 }
@@ -129,6 +132,52 @@ fun HomeScreen(
                             imageVector = Icons.Default.Notifications,
                             contentDescription = "Notificaciones"
                         )
+                    }
+                }
+            }
+        }
+
+        // Distinctive Guest Mode Banner (if guest)
+        if (isGuest) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.9f)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Modo Invitado (Solo Lectura)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "Escuchas en línea gratis. Crea una cuenta para descargar canciones offline y guardar tus favoritos.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = onOpenAuth,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Crear Cuenta", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

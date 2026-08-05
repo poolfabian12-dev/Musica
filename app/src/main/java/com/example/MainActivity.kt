@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.FullScreenPlayerDialog
 import com.example.ui.components.MiniPlayer
+import com.example.ui.components.SecurityReverificationDialog
 import com.example.ui.components.SuggestSongDialog
 import com.example.ui.screens.*
 import com.example.ui.theme.MusicaCristianaTheme
@@ -53,6 +54,10 @@ class MainActivity : ComponentActivity() {
 fun MainAppContent(viewModel: MainViewModel) {
     // Collect Reactive States
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val needsReverification by viewModel.needsReverification.collectAsStateWithLifecycle()
+    val autoLoginCount by viewModel.autoLoginCount.collectAsStateWithLifecycle()
+    val savedUserForReverification by viewModel.savedUserForReverification.collectAsStateWithLifecycle()
+
     val allSongs by viewModel.allSongs.collectAsStateWithLifecycle()
     val downloadedSongs by viewModel.downloadedSongs.collectAsStateWithLifecycle()
     val filteredSongs by viewModel.filteredSongs.collectAsStateWithLifecycle()
@@ -99,11 +104,21 @@ fun MainAppContent(viewModel: MainViewModel) {
     }
 
     val isAdmin = currentUser?.role == "admin"
+    val isGuest = currentUser?.role == "guest"
+
+    // Security Re-verification Dialog after 20 auto-logins
+    if (needsReverification) {
+        SecurityReverificationDialog(
+            user = savedUserForReverification,
+            onVerify = { pwd -> viewModel.verifyIdentity(pwd) },
+            onSwitchUser = { viewModel.switchUser() }
+        )
+    }
 
     if (currentUser == null) {
         LoginScreen(
-            onLoginSuccess = { email, name, role ->
-                viewModel.login(email, name, role)
+            onLoginSuccess = { email, name, role, password ->
+                viewModel.login(email, name, role, password)
                 currentScreen = Screen.Home
             }
         )
@@ -152,79 +167,87 @@ fun MainAppContent(viewModel: MainViewModel) {
                     .padding(innerPadding)
             ) {
                 when (currentScreen) {
-                Screen.Home -> HomeScreen(
-                    songs = allSongs,
-                    favoriteIds = favoriteSongIds,
-                    currentPlayingSong = currentSong,
-                    isPlaying = isPlaying,
-                    unreadNotificationsCount = unreadNotificationsCount,
-                    onSongSelect = { song -> viewModel.playSong(song) },
-                    onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
-                    onDownloadSong = { song -> viewModel.downloadSong(song) },
-                    onOpenSuggestDialog = { showSuggestDialog = true },
-                    onOpenNotifications = { currentScreen = Screen.Profile }
-                )
+                    Screen.Home -> HomeScreen(
+                        songs = allSongs,
+                        favoriteIds = favoriteSongIds,
+                        currentPlayingSong = currentSong,
+                        isPlaying = isPlaying,
+                        unreadNotificationsCount = unreadNotificationsCount,
+                        isGuest = isGuest,
+                        onSongSelect = { song -> viewModel.playSong(song) },
+                        onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
+                        onDownloadSong = { song -> viewModel.downloadSong(song) },
+                        onOpenSuggestDialog = { showSuggestDialog = true },
+                        onOpenNotifications = { currentScreen = Screen.Profile },
+                        onOpenAuth = { viewModel.logout() }
+                    )
 
-                Screen.Explore -> ExploreScreen(
-                    searchQuery = searchQuery,
-                    onSearchChange = { q -> viewModel.setSearchQuery(q) },
-                    filteredSongs = filteredSongs,
-                    favoriteIds = favoriteSongIds,
-                    currentPlayingSong = currentSong,
-                    isPlaying = isPlaying,
-                    onSongSelect = { song -> viewModel.playSong(song) },
-                    onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
-                    onDownloadSong = { song -> viewModel.downloadSong(song) }
-                )
+                    Screen.Explore -> ExploreScreen(
+                        searchQuery = searchQuery,
+                        onSearchChange = { q -> viewModel.setSearchQuery(q) },
+                        filteredSongs = filteredSongs,
+                        favoriteIds = favoriteSongIds,
+                        currentPlayingSong = currentSong,
+                        isPlaying = isPlaying,
+                        onSongSelect = { song -> viewModel.playSong(song) },
+                        onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
+                        onDownloadSong = { song -> viewModel.downloadSong(song) }
+                    )
 
-                Screen.Downloads -> DownloadsScreen(
-                    downloadedSongs = downloadedSongs,
-                    favoriteIds = favoriteSongIds,
-                    currentPlayingSong = currentSong,
-                    isPlaying = isPlaying,
-                    onSongSelect = { song -> viewModel.playSong(song) },
-                    onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
-                    onRemoveDownload = { id -> viewModel.removeDownload(id) }
-                )
+                    Screen.Downloads -> DownloadsScreen(
+                        downloadedSongs = downloadedSongs,
+                        favoriteIds = favoriteSongIds,
+                        currentPlayingSong = currentSong,
+                        isPlaying = isPlaying,
+                        isGuest = isGuest,
+                        onSongSelect = { song -> viewModel.playSong(song) },
+                        onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
+                        onRemoveDownload = { id -> viewModel.removeDownload(id) },
+                        onOpenAuth = { viewModel.logout() }
+                    )
 
-                Screen.Favorites -> FavoritesScreen(
-                    favoriteSongs = favoriteSongs,
-                    favoriteIds = favoriteSongIds,
-                    playlists = userPlaylists,
-                    currentPlayingSong = currentSong,
-                    isPlaying = isPlaying,
-                    onSongSelect = { song -> viewModel.playSong(song) },
-                    onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
-                    onDownloadSong = { song -> viewModel.downloadSong(song) },
-                    onCreatePlaylist = { name -> viewModel.createPlaylist(name) }
-                )
+                    Screen.Favorites -> FavoritesScreen(
+                        favoriteSongs = favoriteSongs,
+                        favoriteIds = favoriteSongIds,
+                        playlists = userPlaylists,
+                        currentPlayingSong = currentSong,
+                        isPlaying = isPlaying,
+                        isGuest = isGuest,
+                        onSongSelect = { song -> viewModel.playSong(song) },
+                        onToggleFavorite = { song -> viewModel.toggleFavorite(song) },
+                        onDownloadSong = { song -> viewModel.downloadSong(song) },
+                        onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
+                        onOpenAuth = { viewModel.logout() }
+                    )
 
-                Screen.Profile -> ProfileScreen(
-                    currentUser = currentUser,
-                    favoriteCount = favoriteSongs.size,
-                    downloadCount = downloadedSongs.size,
-                    notifications = notifications,
-                    onLoginAsRole = { email, name, role -> viewModel.login(email, name, role) },
-                    onLogout = { viewModel.logout() },
-                    onMarkNotificationRead = { id -> viewModel.markNotificationRead(id) }
-                )
+                    Screen.Profile -> ProfileScreen(
+                        currentUser = currentUser,
+                        favoriteCount = favoriteSongs.size,
+                        downloadCount = downloadedSongs.size,
+                        notifications = notifications,
+                        autoLoginCount = autoLoginCount,
+                        onLoginAsRole = { email, name, role -> viewModel.login(email, name, role) },
+                        onLogout = { viewModel.logout() },
+                        onMarkNotificationRead = { id -> viewModel.markNotificationRead(id) },
+                        onOpenAuth = { viewModel.logout() }
+                    )
 
-                Screen.Admin -> AdminPanelScreen(
-                    songs = allSongs,
-                    suggestions = suggestions,
-                    users = allUsers,
-                    youtubeState = youtubeState,
-                    onSaveSong = { song -> viewModel.saveSong(song) },
-                    onDeleteSong = { id -> viewModel.deleteSong(id) },
-                    onUpdateSuggestionStatus = { id, status -> viewModel.updateSuggestionStatus(id, status) },
-                    onConvertYoutubeUrl = { url -> viewModel.convertYoutubeUrl(url) },
-                    onResetYoutubeState = { viewModel.resetYoutubeState() },
-                    onLogout = { viewModel.logout() }
-                )
+                    Screen.Admin -> AdminPanelScreen(
+                        songs = allSongs,
+                        suggestions = suggestions,
+                        users = allUsers,
+                        youtubeState = youtubeState,
+                        onSaveSong = { song -> viewModel.saveSong(song) },
+                        onDeleteSong = { id -> viewModel.deleteSong(id) },
+                        onUpdateSuggestionStatus = { id, status -> viewModel.updateSuggestionStatus(id, status) },
+                        onConvertYoutubeUrl = { url -> viewModel.convertYoutubeUrl(url) },
+                        onResetYoutubeState = { viewModel.resetYoutubeState() },
+                        onLogout = { viewModel.logout() }
+                    )
+                }
             }
         }
     }
-}
 
     // Modal Full Screen Player
     FullScreenPlayerDialog(

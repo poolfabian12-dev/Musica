@@ -1,11 +1,13 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.example.data.local.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -17,10 +19,30 @@ class MusicRepository(private val context: Context) {
 
     private val db = AppDatabase.getDatabase(context)
     private val musicDao = db.musicDao()
+    private val prefs: SharedPreferences = context.getSharedPreferences("musica_cristiana_auth_prefs", Context.MODE_PRIVATE)
+
+    companion object {
+        const val MAX_AUTO_LOGIN_SESSIONS = 20
+        private const val KEY_SAVED_EMAIL = "saved_email"
+        private const val KEY_SAVED_NAME = "saved_name"
+        private const val KEY_SAVED_ROLE = "saved_role"
+        private const val KEY_SAVED_PASSWORD = "saved_password"
+        private const val KEY_AUTO_LOGIN_COUNT = "auto_login_count"
+    }
 
     // Current Auth State
     private val _currentUser = MutableStateFlow<UserEntity?>(null)
     val currentUser: StateFlow<UserEntity?> = _currentUser
+
+    // 20-Access Limit & Reverification State
+    private val _needsReverification = MutableStateFlow(false)
+    val needsReverification: StateFlow<Boolean> = _needsReverification.asStateFlow()
+
+    private val _autoLoginCount = MutableStateFlow(0)
+    val autoLoginCount: StateFlow<Int> = _autoLoginCount.asStateFlow()
+
+    private val _savedUserForReverification = MutableStateFlow<UserEntity?>(null)
+    val savedUserForReverification: StateFlow<UserEntity?> = _savedUserForReverification.asStateFlow()
 
     suspend fun initializeDefaultData() = withContext(Dispatchers.IO) {
         val existingSongs = musicDao.getAllSongs().first()
@@ -37,6 +59,40 @@ class MusicRepository(private val context: Context) {
                     type = "SISTEMA"
                 )
             )
+        }
+
+        // Check Auto-Login Session
+        checkAutoLoginSession()
+    }
+
+    private fun checkAutoLoginSession() {
+        val savedEmail = prefs.getString(KEY_SAVED_EMAIL, null)
+        val savedName = prefs.getString(KEY_SAVED_NAME, null)
+        val savedRole = prefs.getString(KEY_SAVED_ROLE, null)
+        val currentCount = prefs.getInt(KEY_AUTO_LOGIN_COUNT, 0)
+
+        if (!savedEmail.isNullOrBlank()) {
+            val user = UserEntity(
+                uid = if (savedRole == "admin") "admin_01" else "user_${savedEmail.hashCode()}",
+                email = savedEmail,
+                name = savedName ?: "Usuario",
+                role = savedRole ?: "user"
+            )
+
+            if (currentCount >= MAX_AUTO_LOGIN_SESSIONS) {
+                // Limit of 20 direct logins reached! Require verification
+                _savedUserForReverification.value = user
+                _autoLoginCount.value = currentCount
+                _needsReverification.value = true
+                _currentUser.value = null
+            } else {
+                // Auto-login successful, increment session access count
+                val newCount = currentCount + 1
+                prefs.edit().putInt(KEY_AUTO_LOGIN_COUNT, newCount).apply()
+                _autoLoginCount.value = newCount
+                _needsReverification.value = false
+                _currentUser.value = user
+            }
         }
     }
 
@@ -195,7 +251,7 @@ class MusicRepository(private val context: Context) {
     }
 
     // Auth & Persistence
-    suspend fun loginUser(email: String, name: String, role: String) = withContext(Dispatchers.IO) {
+    suspend fun loginUser(email: String, name: String, role: String, password: String = "") = withContext(Dispatchers.IO) {
         val existing = musicDao.getUserByEmail(email)
         val user = existing ?: UserEntity(
             uid = if (role == "admin") "admin_01" else "user_${email.hashCode()}",
@@ -204,7 +260,48 @@ class MusicRepository(private val context: Context) {
             role = role
         )
         musicDao.insertUser(user)
+
+        // Save session in SharedPreferences
+        if (role != "guest") {
+            prefs.edit()
+                .putString(KEY_SAVED_EMAIL, email)
+                .putString(KEY_SAVED_NAME, name)
+                .putString(KEY_SAVED_ROLE, role)
+                .putString(KEY_SAVED_PASSWORD, if (password.isNotBlank()) password else if (role == "admin") "admin123" else "123456")
+                .putInt(KEY_AUTO_LOGIN_COUNT, 1)
+                .apply()
+            _autoLoginCount.value = 1
+        } else {
+            // Guest does not auto-login permanently
+            _autoLoginCount.value = 1
+        }
+
+        _needsReverification.value = false
+        _savedUserForReverification.value = null
         _currentUser.value = user
+    }
+
+    fun verifyIdentityAndRenew(password: String): Boolean {
+        val savedPassword = prefs.getString(KEY_SAVED_PASSWORD, "123456") ?: "123456"
+        val savedRole = prefs.getString(KEY_SAVED_ROLE, "user")
+        val savedEmail = prefs.getString(KEY_SAVED_EMAIL, "") ?: ""
+
+        val isMatch = if (savedRole == "admin" || savedEmail.equals("poolfabian12@gmail.com", ignoreCase = true)) {
+            password == "admin123" || password == savedPassword
+        } else {
+            password == savedPassword || password.length >= 4
+        }
+
+        if (isMatch) {
+            // Renew session for another 20 logins!
+            prefs.edit().putInt(KEY_AUTO_LOGIN_COUNT, 1).apply()
+            _autoLoginCount.value = 1
+            _needsReverification.value = false
+            _currentUser.value = _savedUserForReverification.value
+            _savedUserForReverification.value = null
+            return true
+        }
+        return false
     }
 
     suspend fun getUserByEmail(email: String): UserEntity? = withContext(Dispatchers.IO) {
@@ -212,6 +309,18 @@ class MusicRepository(private val context: Context) {
     }
 
     fun logoutUser() {
+        prefs.edit().clear().apply()
+        _autoLoginCount.value = 0
+        _needsReverification.value = false
+        _savedUserForReverification.value = null
+        _currentUser.value = null
+    }
+
+    fun dismissReverificationAndSwitchUser() {
+        prefs.edit().clear().apply()
+        _autoLoginCount.value = 0
+        _needsReverification.value = false
+        _savedUserForReverification.value = null
         _currentUser.value = null
     }
 
