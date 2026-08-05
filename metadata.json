@@ -1,0 +1,6 @@
+{
+  "name": "Música Cristiana",
+  "description": "Aplicación de música cristiana con reproducción en streaming, letras, descargas offline, listas de reproducción, panel admin y sugerencias.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
