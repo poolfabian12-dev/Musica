@@ -23,7 +23,10 @@ sealed class YoutubeConversionState {
         val coverUrl: String,
         val title: String,
         val artist: String,
-        val durationSeconds: Int = 210
+        val durationSeconds: Int = 210,
+        val localFilePath: String = "",
+        val isStoredLocally: Boolean = true,
+        val isUploadedToCloudinary: Boolean = false
     ) : YoutubeConversionState()
     data class Error(val message: String) : YoutubeConversionState()
 }
@@ -228,7 +231,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun convertYoutubeUrl(url: String) {
+    fun convertYoutubeUrl(url: String, saveMode: Int = 0) {
         if (url.isBlank() || (!url.contains("youtube.com") && !url.contains("youtu.be"))) {
             _userMessage.value = "Por favor ingresa una URL válida de YouTube."
             return
@@ -238,6 +241,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _youtubeState.value = YoutubeConversionState.Processing(15, "Obteniendo datos del video...")
             val result = youtubeConverter.convertAndUploadToCloudinary(
                 youtubeUrl = url,
+                saveMode = saveMode,
                 onProgress = { progressText ->
                     val percent = when {
                         progressText.startsWith("1") -> 25
@@ -257,15 +261,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     coverUrl = res.cloudinaryCoverUrl,
                     title = res.title,
                     artist = res.artist,
-                    durationSeconds = res.durationSeconds
+                    durationSeconds = res.durationSeconds,
+                    localFilePath = res.localFilePath,
+                    isStoredLocally = res.isStoredLocally,
+                    isUploadedToCloudinary = res.isUploadedToCloudinary
                 )
-                _userMessage.value = "¡Video convertido a MP3 y subido a Cloudinary!"
+                val msg = when {
+                    res.isUploadedToCloudinary && res.isStoredLocally -> "¡Canción convertida a MP3, guardada en tu celular y subida a Cloudinary!"
+                    res.isStoredLocally -> "¡Canción convertida a MP3 y guardada en el almacenamiento de tu celular!"
+                    else -> "¡Canción convertida con éxito!"
+                }
+                _userMessage.value = msg
             } else {
                 val err = result.exceptionOrNull()?.message ?: "Error desconocido en la conversión"
                 _youtubeState.value = YoutubeConversionState.Error(err)
                 _userMessage.value = "Error al convertir: $err"
             }
         }
+    }
+
+    fun downloadSongMp3(song: SongEntity) {
+        viewModelScope.launch {
+            com.example.util.AudioFileManager.downloadSongToDeviceDownloads(getApplication(), song) { success, msg ->
+                _userMessage.value = msg
+            }
+        }
+    }
+
+    fun shareSongMp3(song: SongEntity) {
+        com.example.util.AudioFileManager.shareSongMp3(getApplication(), song)
     }
 
     fun resetYoutubeState() {

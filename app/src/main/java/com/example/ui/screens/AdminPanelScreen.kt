@@ -49,6 +49,9 @@ fun AdminPanelScreen(
     suggestions: List<SuggestionEntity>,
     users: List<UserEntity>,
     youtubeState: YoutubeConversionState,
+    currentPlayingSong: SongEntity? = null,
+    isPlaying: Boolean = false,
+    onPlaySong: (SongEntity) -> Unit = {},
     onSaveSong: (SongEntity) -> Unit,
     onDeleteSong: (String) -> Unit,
     onUpdateSuggestionStatus: (String, String) -> Unit,
@@ -278,6 +281,9 @@ fun AdminPanelScreen(
             )
             1 -> SongsLibraryTab(
                 songs = songs,
+                currentPlayingSong = currentPlayingSong,
+                isPlaying = isPlaying,
+                onPlaySong = onPlaySong,
                 onSaveSong = onSaveSong,
                 onDeleteSong = { id ->
                     onDeleteSong(id)
@@ -297,6 +303,47 @@ fun AdminPanelScreen(
 
     // Modal Converter YouTube Dialog
     if (showConverterModal) {
+        val context = LocalContext.current
+        val coroutineScope = rememberCoroutineScope()
+        var ytUrl by remember { mutableStateOf("") }
+        var selectedSaveMode by remember { mutableStateOf(0) } // 0 = Ambos (Cloudinary + Celular), 1 = Solo Celular (Local Offline), 2 = Solo Cloudinary
+        var customConvertedTitle by remember { mutableStateOf("") }
+        var customConvertedArtist by remember { mutableStateOf("") }
+
+        val localAudioPicker = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent()
+        ) { uri: Uri? ->
+            if (uri != null) {
+                val fileName = uri.lastPathSegment ?: "audio_local.mp3"
+                val savedPath = com.example.util.AudioFileManager.copyUriToInternalAudio(context, uri, fileName)
+                if (savedPath != null) {
+                    val cleanTitle = fileName.substringBeforeLast(".").replace("_", " ").trim()
+                    val newSong = SongEntity(
+                        id = UUID.randomUUID().toString(),
+                        title = cleanTitle.ifBlank { "Alabanza Cristiana" },
+                        artist = "Música Cristiana",
+                        ministry = "Música Cristiana",
+                        genre = "Adoración (Worship)",
+                        album = "Audio Celular",
+                        year = 2025,
+                        durationSeconds = 240,
+                        audioUrl = savedPath,
+                        coverUrl = "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500",
+                        isDownloaded = true,
+                        localFilePath = savedPath,
+                        playsCount = 0,
+                        downloadsCount = 1,
+                        timestamp = System.currentTimeMillis()
+                    )
+                    onSaveSong(newSong)
+                    showConverterModal = false
+                    adminMessage = "¡Audio MP3 guardado en tu celular y añadido a la biblioteca!"
+                } else {
+                    android.widget.Toast.makeText(context, "No se pudo procesar el archivo seleccionado", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
         AlertDialog(
             onDismissRequest = {
                 showConverterModal = false
@@ -310,13 +357,16 @@ fun AdminPanelScreen(
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Text(
-                        text = "Convierte cualquier video de YouTube a MP3 para integrarlo directamente en tu catálogo.",
+                        text = "Convierte videos de YouTube a MP3 para escucharlos y descargarlos directamente en tu celular o subirlos a la nube.",
                         style = MaterialTheme.typography.bodySmall
                     )
-
-                    var ytUrl by remember { mutableStateOf("") }
 
                     OutlinedTextField(
                         value = ytUrl,
@@ -327,56 +377,219 @@ fun AdminPanelScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
 
+                    // Storage destination selector
+                    Text(
+                        text = "Destino del Audio MP3:",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        FilterChip(
+                            selected = selectedSaveMode == 0,
+                            onClick = { selectedSaveMode = 0 },
+                            label = { Text("🔄 Ambos", fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedSaveMode == 1,
+                            onClick = { selectedSaveMode = 1 },
+                            label = { Text("📱 En Celular", fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = selectedSaveMode == 2,
+                            onClick = { selectedSaveMode = 2 },
+                            label = { Text("☁️ Cloudinary", fontSize = 11.sp) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Direct Option to Pick MP3 from Device Files
+                    OutlinedButton(
+                        onClick = { localAudioPicker.launch("audio/*") },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("📁 O Elegir archivo MP3 desde mi Celular", fontSize = 12.sp)
+                    }
+
                     when (youtubeState) {
                         is YoutubeConversionState.Processing -> {
-                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            Text("Procesando audio y metadatos de YouTube (${youtubeState.progressPercent}%)...", style = MaterialTheme.typography.bodySmall)
-                        }
-                        is YoutubeConversionState.Error -> {
-                            Text(
-                                text = youtubeState.message,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                        is YoutubeConversionState.Success -> {
                             Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("✅ Audio MP3 Convertido y Subido a Cloudinary:", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                    Text("Título: ${youtubeState.title}", fontWeight = FontWeight.SemiBold)
-                                    Text("Artista: ${youtubeState.artist}")
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = youtubeState.statusText,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                    }
+                                    LinearProgressIndicator(
+                                        progress = { youtubeState.progressPercent / 100f },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
+                        }
+                        is YoutubeConversionState.Error -> {
+                            Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(
+                                        text = "⚠️ ${youtubeState.message}",
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        text = "Tip: También puedes usar 'Elegir archivo MP3 desde mi Celular' arriba para agregar el audio directamente.",
+                                        style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onErrorContainer)
+                                    )
+                                }
+                            }
+                        }
+                        is YoutubeConversionState.Success -> {
+                            LaunchedEffect(youtubeState) {
+                                customConvertedTitle = youtubeState.title
+                                customConvertedArtist = youtubeState.artist
+                            }
+
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(20.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("¡Audio MP3 Listo!", fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), fontSize = 14.sp)
+                                    }
+
+                                    // Status info
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (youtubeState.isStoredLocally || youtubeState.localFilePath.isNotBlank()) {
+                                            Surface(
+                                                color = Color(0xFF2E7D32).copy(alpha = 0.2f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text("📱 Guardado en Celular", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                            }
+                                        }
+                                        if (youtubeState.isUploadedToCloudinary) {
+                                            Surface(
+                                                color = Color(0xFF00BCD4).copy(alpha = 0.2f),
+                                                shape = RoundedCornerShape(6.dp)
+                                            ) {
+                                                Text("☁️ Subido a Cloudinary", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF00838F), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                            }
+                                        }
+                                    }
+
+                                    // Editable fields before saving
+                                    OutlinedTextField(
+                                        value = customConvertedTitle,
+                                        onValueChange = { customConvertedTitle = it },
+                                        label = { Text("Título de la Canción") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    OutlinedTextField(
+                                        value = customConvertedArtist,
+                                        onValueChange = { customConvertedArtist = it },
+                                        label = { Text("Artista / Ministerio") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Action Buttons Row (Download to Device + Play Test Audio)
+                                    val previewSong = SongEntity(
+                                        id = UUID.randomUUID().toString(),
+                                        title = customConvertedTitle.ifBlank { youtubeState.title },
+                                        artist = customConvertedArtist.ifBlank { youtubeState.artist },
+                                        ministry = customConvertedArtist.ifBlank { youtubeState.artist },
+                                        genre = "Adoración (Worship)",
+                                        album = "YouTube MP3",
+                                        year = 2025,
+                                        durationSeconds = youtubeState.durationSeconds,
+                                        audioUrl = youtubeState.mp3Url,
+                                        coverUrl = if (youtubeState.coverUrl.isNotBlank()) youtubeState.coverUrl else "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500",
+                                        isDownloaded = youtubeState.localFilePath.isNotBlank(),
+                                        localFilePath = youtubeState.localFilePath,
+                                        playsCount = 0,
+                                        downloadsCount = 0,
+                                        timestamp = System.currentTimeMillis()
+                                    )
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        // Play audio preview button
+                                        OutlinedButton(
+                                            onClick = { onPlaySong(previewSong) },
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Escuchar", fontSize = 11.sp)
+                                        }
+
+                                        // Download MP3 to phone button
+                                        Button(
+                                            onClick = {
+                                                coroutineScope.launch {
+                                                    com.example.util.AudioFileManager.downloadSongToDeviceDownloads(context, previewSong)
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
+                                            modifier = Modifier.weight(1f),
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 6.dp)
+                                        ) {
+                                            Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Descargar MP3", fontSize = 11.sp)
+                                        }
+                                    }
+
+                                    // Add to Catalog / Library Button
                                     Button(
                                         onClick = {
-                                            val song = SongEntity(
-                                                id = UUID.randomUUID().toString(),
-                                                title = youtubeState.title,
-                                                artist = youtubeState.artist,
-                                                ministry = youtubeState.artist,
-                                                genre = "Adoración (Worship)",
-                                                album = "YouTube MP3",
-                                                year = 2025,
-                                                durationSeconds = youtubeState.durationSeconds,
-                                                audioUrl = youtubeState.mp3Url,
-                                                coverUrl = if (youtubeState.coverUrl.isNotBlank()) youtubeState.coverUrl else "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500",
-                                                playsCount = 0,
-                                                downloadsCount = 0,
-                                                timestamp = System.currentTimeMillis()
+                                            val songToSave = previewSong.copy(
+                                                title = customConvertedTitle.trim().ifEmpty { youtubeState.title },
+                                                artist = customConvertedArtist.trim().ifEmpty { youtubeState.artist }
                                             )
-                                            onSaveSong(song)
+                                            onSaveSong(songToSave)
                                             showConverterModal = false
                                             onResetYoutubeState()
-                                            adminMessage = "¡Canción de YouTube agregada al catálogo con audio MP3!"
+                                            adminMessage = "¡Canción '${songToSave.title}' añadida a la biblioteca con MP3!"
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                                        shape = RoundedCornerShape(10.dp),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.AddCircle, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Añadir a la Biblioteca")
+                                        Text("Añadir a la Biblioteca de Canciones", fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -388,9 +601,13 @@ fun AdminPanelScreen(
                                         onConvertYoutubeUrl(ytUrl.trim())
                                     }
                                 },
+                                enabled = ytUrl.isNotBlank(),
+                                shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Convertir Audio")
+                                Icon(Icons.Default.PlayCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Convertir y Generar MP3")
                             }
                         }
                     }
@@ -1015,9 +1232,15 @@ private fun UploadSongTab(
                                     if (audioResult.isSuccess) {
                                         finalAudioUrl = audioResult.getOrThrow()
                                     } else {
-                                        formError = "Error al subir audio a Cloudinary: ${audioResult.exceptionOrNull()?.message}"
-                                        isUploading = false
-                                        return@launch
+                                        // Save locally to device storage so addition never fails
+                                        val savedLocalPath = com.example.util.AudioFileManager.copyUriToInternalAudio(context, audioUri, fileName)
+                                        if (savedLocalPath != null) {
+                                            finalAudioUrl = savedLocalPath
+                                        } else {
+                                            formError = "Error al procesar audio: ${audioResult.exceptionOrNull()?.message}"
+                                            isUploading = false
+                                            return@launch
+                                        }
                                     }
                                 }
                             }
@@ -1109,9 +1332,14 @@ private fun UploadSongTab(
 @Composable
 private fun SongsLibraryTab(
     songs: List<SongEntity>,
+    currentPlayingSong: SongEntity? = null,
+    isPlaying: Boolean = false,
+    onPlaySong: (SongEntity) -> Unit = {},
     onSaveSong: (SongEntity) -> Unit,
     onDeleteSong: (String) -> Unit
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     var searchQuery by remember { mutableStateOf("") }
     var editingSong by remember { mutableStateOf<SongEntity?>(null) }
 
@@ -1181,8 +1409,8 @@ private fun SongsLibraryTab(
                         Text("TÍTULO", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.2f))
                         Text("ARTISTA", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         Text("GÉNERO", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.9f))
-                        Text("REPROD.", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(60.dp))
-                        Text("ACCIONES", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp), textAlign = TextAlign.End)
+                        Text("REPROD.", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(55.dp))
+                        Text("ACCIONES", fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(130.dp), textAlign = TextAlign.End)
                     }
                 }
 
@@ -1199,27 +1427,56 @@ private fun SongsLibraryTab(
                                     .padding(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Cover Thumbnail
-                                AsyncImage(
-                                    model = song.coverUrl,
-                                    contentDescription = song.title,
-                                    contentScale = ContentScale.Crop,
+                                // Cover Thumbnail with Play Button
+                                Box(
                                     modifier = Modifier
-                                        .size(40.dp)
+                                        .size(44.dp)
                                         .clip(RoundedCornerShape(6.dp))
-                                )
+                                        .clickable { onPlaySong(song) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AsyncImage(
+                                        model = song.coverUrl,
+                                        contentDescription = song.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    val isThisPlaying = currentPlayingSong?.id == song.id && isPlaying
+                                    Surface(
+                                        color = if (isThisPlaying) MaterialTheme.colorScheme.primary.copy(alpha = 0.8f) else Color.Black.copy(alpha = 0.4f),
+                                        shape = CircleShape,
+                                        modifier = Modifier.size(26.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (isThisPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = "Reproducir",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
 
                                 Spacer(modifier = Modifier.width(10.dp))
 
-                                // Title
-                                Text(
-                                    text = song.title,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1.2f)
-                                )
+                                // Title and Audio Source Info
+                                Column(modifier = Modifier.weight(1.2f)) {
+                                    Text(
+                                        text = song.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    val isCloudinary = song.audioUrl.contains("cloudinary.com")
+                                    Text(
+                                        text = if (isCloudinary) "☁ Cloudinary MP3" else if (song.audioUrl.startsWith("http")) "🌐 Audio Online" else "📱 Audio Local",
+                                        fontSize = 9.sp,
+                                        color = if (isCloudinary) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
 
                                 // Artist
                                 Text(
@@ -1251,7 +1508,7 @@ private fun SongsLibraryTab(
                                 Surface(
                                     color = Color(0xFF4CAF50).copy(alpha = 0.2f),
                                     shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.width(60.dp)
+                                    modifier = Modifier.width(50.dp)
                                 ) {
                                     Text(
                                         text = "▶ ${song.playsCount}",
@@ -1265,20 +1522,56 @@ private fun SongsLibraryTab(
 
                                 // Action Buttons
                                 Row(
-                                    modifier = Modifier.width(80.dp),
-                                    horizontalArrangement = Arrangement.End
+                                    modifier = Modifier.width(130.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // Download MP3 Button
+                                    IconButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                com.example.util.AudioFileManager.downloadSongToDeviceDownloads(context, song)
+                                            }
+                                        },
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.FileDownload,
+                                            contentDescription = "Descargar MP3 al celular",
+                                            tint = Color(0xFF00897B),
+                                            modifier = Modifier.size(17.dp)
+                                        )
+                                    }
+
+                                    // Share MP3 Button
+                                    IconButton(
+                                        onClick = {
+                                            com.example.util.AudioFileManager.shareSongMp3(context, song)
+                                        },
+                                        modifier = Modifier.size(30.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Share,
+                                            contentDescription = "Compartir audio",
+                                            tint = Color(0xFF1E88E5),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    // Edit Song Button
                                     IconButton(
                                         onClick = { editingSong = song },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(30.dp)
                                     ) {
-                                        Icon(Icons.Outlined.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Outlined.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(17.dp))
                                     }
+
+                                    // Delete Song Button
                                     IconButton(
                                         onClick = { onDeleteSong(song.id) },
-                                        modifier = Modifier.size(32.dp)
+                                        modifier = Modifier.size(30.dp)
                                     ) {
-                                        Icon(Icons.Outlined.Delete, contentDescription = "Eliminar", tint = Color(0xFFE53935), modifier = Modifier.size(18.dp))
+                                        Icon(Icons.Outlined.Delete, contentDescription = "Eliminar", tint = Color(0xFFE53935), modifier = Modifier.size(17.dp))
                                     }
                                 }
                             }
@@ -1448,88 +1741,88 @@ private fun AdminToolsTab(
                             }
                         }
 
-                        // Cloudinary Configuration & Test Section
+                        // Cloudinary Configuration, Step-by-step Guide & Diagnostics
                         val uploaderHelper = remember { com.example.data.api.CloudinaryUploader(context) }
                         var currentConfig by remember { mutableStateOf(uploaderHelper.getConfig()) }
                         var showCloudinaryEditor by remember { mutableStateOf(false) }
+                        var showCloudinaryGuide by remember { mutableStateOf(false) }
                         var editCloudName by remember { mutableStateOf(currentConfig.cloudName) }
                         var editPreset by remember { mutableStateOf(currentConfig.uploadPreset) }
                         var editApiKey by remember { mutableStateOf(currentConfig.apiKey) }
                         var editApiSecret by remember { mutableStateOf(currentConfig.apiSecret) }
                         var configSaveMessage by remember { mutableStateOf<String?>(null) }
+                        var isTestingAudio by remember { mutableStateOf(false) }
 
                         Surface(
                             color = MaterialTheme.colorScheme.surface,
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text("Cloudinary (Hosting de Audios MP3 y Fotos)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                        Text("Cloud Name: ${currentConfig.cloudName} | Preset: ${currentConfig.uploadPreset}", style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                                        Text("☁️ Cloudinary (Hosting de Canciones MP3 y Fotos)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text("Cloud Name: ${currentConfig.cloudName} | Preset: ${currentConfig.uploadPreset}", style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary))
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         OutlinedButton(
+                                            onClick = { showCloudinaryGuide = !showCloudinaryGuide },
+                                            shape = RoundedCornerShape(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                                        ) {
+                                            Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(if (showCloudinaryGuide) "Ocultar Guía" else "📖 Ver Guía", fontSize = 10.sp)
+                                        }
+                                        Button(
                                             onClick = { showCloudinaryEditor = !showCloudinaryEditor },
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
-                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(12.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text(if (showCloudinaryEditor) "Ocultar" else "Configurar", fontSize = 10.sp)
-                                        }
-                                        Button(
-                                            onClick = {
-                                                scope.launch {
-                                                    isTesting = true
-                                                    testStatus = "Probando conexión con Cloudinary..."
-                                                    try {
-                                                        val testBytes = "TEST_PING".toByteArray()
-                                                        val result = uploaderHelper.uploadBytes(
-                                                            fileBytes = testBytes,
-                                                            fileName = "test_ping_${System.currentTimeMillis()}.txt",
-                                                            resourceType = "auto"
-                                                        )
-                                                        if (result.isSuccess) {
-                                                            testStatus = "✅ Conexión con Cloudinary exitosa. Servidor listo para subidas."
-                                                        } else {
-                                                            testStatus = "⚠️ ${result.exceptionOrNull()?.message}"
-                                                        }
-                                                    } catch (e: Exception) {
-                                                        testStatus = "Error: ${e.message}"
-                                                    } finally {
-                                                        isTesting = false
-                                                    }
-                                                }
-                                            },
-                                            enabled = !isTesting,
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            if (isTesting) {
-                                                CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = Color.White)
-                                            } else {
-                                                Icon(Icons.Default.CloudDone, contentDescription = null, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Probar", fontSize = 10.sp)
-                                            }
+                                            Text(if (showCloudinaryEditor) "Cerrar" else "Ajustar", fontSize = 10.sp)
                                         }
                                     }
                                 }
 
+                                // Step-by-Step Interactive Guide
+                                AnimatedVisibility(visible = showCloudinaryGuide) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            Text("📋 Paso a Paso para Alojar Canciones en Cloudinary (Gratis):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
+                                            
+                                            Text("1️⃣ Entra a https://cloudinary.com y crea tu cuenta gratuita.", fontSize = 11.sp)
+                                            Text("2️⃣ En el Dashboard principal copia tu 'Cloud Name' (ejemplo: mi_nube_123).", fontSize = 11.sp)
+                                            Text("3️⃣ Ve a ⚙️ Settings (Tuerca) ➔ pestaña 'Upload' ➔ baja hasta 'Upload presets'.", fontSize = 11.sp)
+                                            Text("4️⃣ Haz clic en 'Add upload preset'.", fontSize = 11.sp)
+                                            Text("5️⃣ ⚠️ MUY IMPORTANTE: Cambia 'Signing Mode' de 'Signed' a 'Unsigned'.", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                                            Text("6️⃣ Ponle un nombre al preset (por ejemplo: musica_cristiana) y haz clic en Save (Guardar).", fontSize = 11.sp)
+                                            Text("7️⃣ Pega el Cloud Name y el Preset abajo en 'Ajustar' y presiona 'Guardar Credenciales'.", fontSize = 11.sp)
+                                            Text("8️⃣ Presiona '🧪 Probar Subida Real de Audio' para verificar que tu enlace CDN funcione.", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+
+                                // Editor Fields
                                 AnimatedVisibility(visible = showCloudinaryEditor) {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
-                                        Text("Ingresa las credenciales de tu cuenta de Cloudinary (gratis):", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Configura los datos de tu cuenta de Cloudinary:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                         
                                         OutlinedTextField(
                                             value = editCloudName,
                                             onValueChange = { editCloudName = it },
-                                            label = { Text("Cloud Name", fontSize = 11.sp) },
+                                            label = { Text("Cloud Name (Tu nombre de nube en Cloudinary)", fontSize = 11.sp) },
+                                            placeholder = { Text("ej: dne01qj9q o mi_nube") },
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -1537,7 +1830,8 @@ private fun AdminToolsTab(
                                         OutlinedTextField(
                                             value = editPreset,
                                             onValueChange = { editPreset = it },
-                                            label = { Text("Upload Preset (Unsigned)", fontSize = 11.sp) },
+                                            label = { Text("Upload Preset Name (En modo Unsigned)", fontSize = 11.sp) },
+                                            placeholder = { Text("ej: ml_default o musica_cristiana") },
                                             singleLine = true,
                                             modifier = Modifier.fillMaxWidth()
                                         )
@@ -1546,14 +1840,14 @@ private fun AdminToolsTab(
                                             OutlinedTextField(
                                                 value = editApiKey,
                                                 onValueChange = { editApiKey = it },
-                                                label = { Text("API Key", fontSize = 11.sp) },
+                                                label = { Text("API Key (Opcional)", fontSize = 11.sp) },
                                                 singleLine = true,
                                                 modifier = Modifier.weight(1f)
                                             )
                                             OutlinedTextField(
                                                 value = editApiSecret,
                                                 onValueChange = { editApiSecret = it },
-                                                label = { Text("API Secret", fontSize = 11.sp) },
+                                                label = { Text("API Secret (Opcional)", fontSize = 11.sp) },
                                                 singleLine = true,
                                                 modifier = Modifier.weight(1f)
                                             )
@@ -1568,11 +1862,14 @@ private fun AdminToolsTab(
                                                     apiSecret = editApiSecret
                                                 )
                                                 currentConfig = uploaderHelper.getConfig()
-                                                configSaveMessage = "✅ Credenciales de Cloudinary guardadas exitosamente."
+                                                configSaveMessage = "✅ Credenciales guardadas: Nube '${editCloudName.trim()}', Preset '${editPreset.trim()}'"
                                             },
                                             modifier = Modifier.fillMaxWidth(),
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
                                             shape = RoundedCornerShape(8.dp)
                                         ) {
+                                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
                                             Text("Guardar Credenciales de Cloudinary", fontSize = 12.sp)
                                         }
 
@@ -1587,11 +1884,94 @@ private fun AdminToolsTab(
                                     }
                                 }
 
+                                // Test Buttons (Quick Ping and Real Audio Upload Test)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = {
+                                            scope.launch {
+                                                isTesting = true
+                                                testStatus = "Verificando conexión con Cloudinary..."
+                                                try {
+                                                    val testBytes = "TEST_PING".toByteArray()
+                                                    val result = uploaderHelper.uploadBytes(
+                                                        fileBytes = testBytes,
+                                                        fileName = "test_ping_${System.currentTimeMillis()}.txt",
+                                                        resourceType = "auto"
+                                                    )
+                                                    if (result.isSuccess) {
+                                                        testStatus = "✅ Conexión con Cloudinary exitosa. Servidor listo para subidas.\nURL: ${result.getOrThrow()}"
+                                                    } else {
+                                                        testStatus = "⚠️ ${result.exceptionOrNull()?.message}"
+                                                    }
+                                                } catch (e: Exception) {
+                                                    testStatus = "Error: ${e.message}"
+                                                } finally {
+                                                    isTesting = false
+                                                }
+                                            }
+                                        },
+                                        enabled = !isTesting && !isTestingAudio,
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        if (isTesting) {
+                                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                                        } else {
+                                            Icon(Icons.Default.Wifi, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Test Conexión", fontSize = 11.sp)
+                                        }
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                isTestingAudio = true
+                                                testStatus = "Subiendo archivo de audio MP3 de prueba a Cloudinary..."
+                                                try {
+                                                    val testAudioPath = com.example.player.WorshipAudioSynthesizer.getOrCreateDefaultWorshipAudio(context)
+                                                    val audioFile = java.io.File(testAudioPath)
+                                                    if (audioFile.exists()) {
+                                                        val result = uploaderHelper.uploadBytes(
+                                                            fileBytes = audioFile.readBytes(),
+                                                            fileName = "prueba_audio_${System.currentTimeMillis()}.mp3",
+                                                            resourceType = "video"
+                                                        )
+                                                        if (result.isSuccess) {
+                                                            testStatus = "🎉 ¡Prueba de Audio MP3 Exitosa en Cloudinary!\nURL alojada: ${result.getOrThrow()}"
+                                                        } else {
+                                                            testStatus = "⚠️ Falló subida de audio: ${result.exceptionOrNull()?.message}"
+                                                        }
+                                                    } else {
+                                                        testStatus = "Error generando audio de prueba local"
+                                                    }
+                                                } catch (e: Exception) {
+                                                    testStatus = "Error en prueba de audio: ${e.message}"
+                                                } finally {
+                                                    isTestingAudio = false
+                                                }
+                                            }
+                                        },
+                                        enabled = !isTesting && !isTestingAudio,
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1.3f)
+                                    ) {
+                                        if (isTestingAudio) {
+                                            CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = Color.White)
+                                        } else {
+                                            Icon(Icons.Default.Audiotrack, contentDescription = null, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text("Probar Audio MP3", fontSize = 11.sp)
+                                        }
+                                    }
+                                }
+
                                 if (testStatus != null) {
                                     Text(
                                         text = testStatus!!,
                                         style = MaterialTheme.typography.bodySmall.copy(
-                                            color = if (testStatus!!.startsWith("✅")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
+                                            color = if (testStatus!!.startsWith("✅") || testStatus!!.startsWith("🎉")) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     )

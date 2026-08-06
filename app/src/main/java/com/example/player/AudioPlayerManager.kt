@@ -199,17 +199,15 @@ class AudioPlayerManager(private val context: Context) {
                         mediaPlayer?.release()
                         mediaPlayer = null
                         if (attempt == 0) {
-                            // Retry with public worship stream
+                            // Retry with public worship stream 1
                             initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM, song, attempt = 1)
                         } else if (attempt == 1) {
-                            // Retry with local synthesized worship melody
-                            val localAudio = WorshipAudioSynthesizer.getOrCreateDefaultWorshipAudio(context)
-                            if (localAudio.isNotBlank()) {
-                                initMediaPlayer(localAudio, song, attempt = 2)
-                            } else {
-                                _isBuffering.value = false
-                                _isPlaying.value = false
-                            }
+                            // Retry with public worship stream 2
+                            initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM_2, song, attempt = 2)
+                        } else if (attempt == 2) {
+                            // Fallback to locally synthesized worship audio
+                            val synthAudioPath = WorshipAudioSynthesizer.getOrCreateDefaultWorshipAudio(context)
+                            initMediaPlayer(synthAudioPath, song, attempt = 3)
                         } else {
                             _isBuffering.value = false
                             _isPlaying.value = false
@@ -231,10 +229,7 @@ class AudioPlayerManager(private val context: Context) {
                 if (attempt == 0) {
                     initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM, song, attempt = 1)
                 } else if (attempt == 1) {
-                    val localAudio = WorshipAudioSynthesizer.getOrCreateDefaultWorshipAudio(context)
-                    if (localAudio.isNotBlank()) {
-                        initMediaPlayer(localAudio, song, attempt = 2)
-                    }
+                    initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM_2, song, attempt = 2)
                 } else {
                     _isBuffering.value = false
                     _isPlaying.value = false
