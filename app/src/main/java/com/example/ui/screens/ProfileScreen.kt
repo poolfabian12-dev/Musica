@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.AdminPanelSettings
 import androidx.compose.material.icons.outlined.Notifications
@@ -144,7 +145,7 @@ fun ProfileScreen(
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             LinearProgressIndicator(
-                                progress = (autoLoginCount.coerceIn(0, 20).toFloat() / 20f),
+                                progress = { (autoLoginCount.coerceIn(0, 20).toFloat() / 20f) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(6.dp)
@@ -333,7 +334,7 @@ fun ProfileScreen(
                     }
                 )
 
-                Divider()
+                HorizontalDivider()
 
                 ListItem(
                     headlineContent = { Text("Bandeja de Notificaciones") },
@@ -344,13 +345,13 @@ fun ProfileScreen(
                     modifier = Modifier.clickable { showNotificationsDialog = true }
                 )
 
-                Divider()
+                HorizontalDivider()
 
                 ListItem(
                     headlineContent = { Text("Cerrar Sesión", color = MaterialTheme.colorScheme.error) },
                     leadingContent = {
                         Icon(
-                            imageVector = Icons.Default.ExitToApp,
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error
                         )

@@ -12,6 +12,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -381,7 +382,7 @@ fun LoginScreen(
                                 .height(50.dp)
                                 .testTag("button_submit_auth")
                         ) {
-                            Icon(Icons.Default.Login, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.Login, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("INICIAR SESIÓN", fontWeight = FontWeight.Bold)
                         }
@@ -664,7 +665,7 @@ fun LoginScreen(
                         }
                     }
 
-                    Divider(modifier = Modifier.padding(vertical = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
                     // Social & Guest Section Header
                     Text(

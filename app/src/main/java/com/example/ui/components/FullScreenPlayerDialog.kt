@@ -350,7 +350,7 @@ fun FullScreenPlayerDialog(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             )
-                            Divider(modifier = Modifier.padding(vertical = 12.dp))
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
                             Text(
                                 text = song.lyrics.ifEmpty { "La letra no está disponible para esta canción todavía." },

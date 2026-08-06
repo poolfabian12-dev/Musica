@@ -5,10 +5,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -155,7 +155,7 @@ fun FavoritesScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QueueMusic,
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)
                         )
@@ -226,7 +226,7 @@ fun FavoritesScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                imageVector = Icons.Default.QueueMusic,
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                 contentDescription = "Sin listas",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.size(64.dp)
@@ -262,7 +262,7 @@ fun FavoritesScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.QueueMusic,
+                                        imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(32.dp)

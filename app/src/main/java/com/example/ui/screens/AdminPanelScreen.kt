@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -158,7 +161,7 @@ fun AdminPanelScreen(
                         modifier = Modifier.height(30.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ExitToApp,
+                            imageVector = Icons.AutoMirrored.Filled.ExitToApp,
                             contentDescription = "Salir",
                             modifier = Modifier.size(14.dp)
                         )
@@ -194,7 +197,7 @@ fun AdminPanelScreen(
 
             // Card 3: Playlists Creadas
             AdminStatCard(
-                icon = Icons.Default.PlaylistPlay,
+                icon = Icons.AutoMirrored.Filled.PlaylistPlay,
                 iconColor = Color(0xFFFF9800),
                 count = "0",
                 label = "Playlists Creadas",
@@ -855,7 +858,7 @@ private fun UploadSongTab(
                         label = { Text("Género *") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genreExpanded) },
                         colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
-                        modifier = Modifier.menuAnchor()
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, !isUploading)
                     )
                     ExposedDropdownMenu(
                         expanded = genreExpanded,
@@ -1182,6 +1185,7 @@ private fun UploadSongTab(
                         uploadStatusText = "Iniciando procesamiento de audio..."
 
                         var finalAudioUrl = ""
+                        var finalLocalFilePath = ""
                         var finalCoverUrl = coverUrlInput.trim()
                         var detectedDuration = 210
 
@@ -1204,12 +1208,14 @@ private fun UploadSongTab(
                                     if (convRes.isSuccess) {
                                         val res = convRes.getOrThrow()
                                         finalAudioUrl = res.cloudinaryAudioUrl
+                                        finalLocalFilePath = res.localFilePath
                                         if (finalCoverUrl.isBlank()) {
                                             finalCoverUrl = res.cloudinaryCoverUrl
                                         }
                                         detectedDuration = res.durationSeconds
                                     } else {
-                                        formError = "Error al convertir audio de YouTube: ${convRes.exceptionOrNull()?.message}"
+                                        val reason = convRes.exceptionOrNull()?.message ?: "El servidor de YouTube bloqueó la descarga temporalmente."
+                                        formError = "❌ No se pudo procesar el video de YouTube:\n\n$reason\n\n💡 Para evitar sonidos genéricos o archivos incompletos, la subida fue cancelada. Puedes subir el archivo de audio original seleccionando la opción '3. Elegir MP3 de mi Celular'."
                                         isUploading = false
                                         return@launch
                                     }
@@ -1222,6 +1228,12 @@ private fun UploadSongTab(
                                     val fileName = selectedFileName ?: "cancion_${System.currentTimeMillis()}.mp3"
                                     uploadStatusText = "Subiendo audio a Cloudinary ($fileName)..."
 
+                                    // Save a local copy first
+                                    val savedLocalPath = com.example.util.AudioFileManager.copyUriToInternalAudio(context, audioUri, fileName)
+                                    if (savedLocalPath != null) {
+                                        finalLocalFilePath = savedLocalPath
+                                    }
+
                                     val audioResult = uploader.uploadFromUri(
                                         uri = audioUri,
                                         fileName = fileName,
@@ -1232,8 +1244,6 @@ private fun UploadSongTab(
                                     if (audioResult.isSuccess) {
                                         finalAudioUrl = audioResult.getOrThrow()
                                     } else {
-                                        // Save locally to device storage so addition never fails
-                                        val savedLocalPath = com.example.util.AudioFileManager.copyUriToInternalAudio(context, audioUri, fileName)
                                         if (savedLocalPath != null) {
                                             finalAudioUrl = savedLocalPath
                                         } else {
@@ -1278,7 +1288,9 @@ private fun UploadSongTab(
                                 lyrics = lyricsInput.trim(),
                                 playsCount = 0,
                                 downloadsCount = 0,
-                                timestamp = System.currentTimeMillis()
+                                timestamp = System.currentTimeMillis(),
+                                localFilePath = finalLocalFilePath,
+                                isDownloaded = finalLocalFilePath.isNotBlank()
                             )
 
                             onSaveSong(newSong)
@@ -1775,7 +1787,7 @@ private fun AdminToolsTab(
                                             shape = RoundedCornerShape(8.dp),
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                                         ) {
-                                            Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(12.dp))
+                                            Icon(Icons.AutoMirrored.Filled.HelpOutline, contentDescription = null, modifier = Modifier.size(12.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
                                             Text(if (showCloudinaryGuide) "Ocultar Guía" else "📖 Ver Guía", fontSize = 10.sp)
                                         }

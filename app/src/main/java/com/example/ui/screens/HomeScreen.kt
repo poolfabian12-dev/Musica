@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileDownload
@@ -343,7 +344,7 @@ fun HomeScreen(
                         onFavorite = { onToggleFavorite(song) },
                         onDownload = { onDownloadSong(song) }
                     )
-                    Divider(
+                    HorizontalDivider(
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
@@ -456,7 +457,7 @@ fun SongRowItem(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.VolumeUp else Icons.Default.PlayArrow,
+                        imageVector = if (isPlaying) Icons.AutoMirrored.Filled.VolumeUp else Icons.Default.PlayArrow,
                         contentDescription = "Playing",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)

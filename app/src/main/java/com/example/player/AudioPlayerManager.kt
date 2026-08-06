@@ -82,6 +82,14 @@ class AudioPlayerManager(private val context: Context) {
     private val _selectedPreset = MutableStateFlow(equalizerPresets[0])
     val selectedPreset: StateFlow<EqualizerPreset> = _selectedPreset.asStateFlow()
 
+    // Playback Error Notification State
+    private val _playbackErrorMessage = MutableStateFlow<String?>(null)
+    val playbackErrorMessage: StateFlow<String?> = _playbackErrorMessage.asStateFlow()
+
+    fun clearPlaybackError() {
+        _playbackErrorMessage.value = null
+    }
+
     init {
         startProgressTracker()
     }
@@ -97,6 +105,7 @@ class AudioPlayerManager(private val context: Context) {
         val song = _queue.value.getOrNull(_currentIndex.value) ?: return
         _currentSong.value = song
         _isBuffering.value = true
+        _playbackErrorMessage.value = null
 
         scope.launch {
             try {
@@ -110,6 +119,13 @@ class AudioPlayerManager(private val context: Context) {
                     else -> song.audioUrl
                 }
 
+                if (rawUrl.isBlank()) {
+                    _isBuffering.value = false
+                    _isPlaying.value = false
+                    _playbackErrorMessage.value = "La canción '${song.title}' no tiene un enlace de audio válido."
+                    return@launch
+                }
+
                 // If URL is a YouTube watch URL or not a direct audio file, resolve real audio stream
                 if (rawUrl.contains("youtube.com") || rawUrl.contains("youtu.be")) {
                     val videoId = youtubeConverter.extractVideoId(rawUrl)
@@ -118,15 +134,22 @@ class AudioPlayerManager(private val context: Context) {
                     }
                     if (!stream.isNullOrBlank()) {
                         rawUrl = stream
+                    } else if (song.localFilePath.isNotEmpty() && File(song.localFilePath).exists()) {
+                        rawUrl = song.localFilePath
                     } else {
-                        rawUrl = YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM
+                        _isBuffering.value = false
+                        _isPlaying.value = false
+                        _playbackErrorMessage.value = "No se pudo conectar con la pista de audio original de YouTube para '${song.title}'."
+                        return@launch
                     }
                 }
 
                 initMediaPlayer(rawUrl, song)
             } catch (e: Exception) {
                 Log.e(TAG, "Error playing song: ${e.message}", e)
-                initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM, song, attempt = 1)
+                _isBuffering.value = false
+                _isPlaying.value = false
+                _playbackErrorMessage.value = "Error al iniciar reproducción de '${song.title}': ${e.localizedMessage ?: "Archivo no reproducible"}"
             }
         }
     }
@@ -163,7 +186,7 @@ class AudioPlayerManager(private val context: Context) {
                             mp.setDataSource(fis.fd)
                         }
                     } else {
-                        throw IllegalStateException("Local audio file not found: $filePath")
+                        throw IllegalStateException("Archivo de audio local no encontrado: $filePath")
                     }
                 }
                 else -> {
@@ -185,6 +208,9 @@ class AudioPlayerManager(private val context: Context) {
                     Log.i(TAG, "Audio started playing successfully. Duration: ${_duration.value}ms")
                 } catch (e: Exception) {
                     Log.e(TAG, "Error starting MediaPlayer onPrepared: ${e.message}")
+                    _isBuffering.value = false
+                    _isPlaying.value = false
+                    _playbackErrorMessage.value = "Error al iniciar reproducción de '${song.title}'."
                 }
             }
 
@@ -198,24 +224,21 @@ class AudioPlayerManager(private val context: Context) {
                     try {
                         mediaPlayer?.release()
                         mediaPlayer = null
-                        if (attempt == 0) {
-                            // Retry with public worship stream 1
-                            initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM, song, attempt = 1)
-                        } else if (attempt == 1) {
-                            // Retry with public worship stream 2
-                            initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM_2, song, attempt = 2)
-                        } else if (attempt == 2) {
-                            // Fallback to locally synthesized worship audio
-                            val synthAudioPath = WorshipAudioSynthesizer.getOrCreateDefaultWorshipAudio(context)
-                            initMediaPlayer(synthAudioPath, song, attempt = 3)
+
+                        // If local file path exists and wasn't tried yet, attempt local fallback
+                        if (attempt == 0 && song.localFilePath.isNotEmpty() && File(song.localFilePath).exists() && urlToPlay != song.localFilePath) {
+                            Log.i(TAG, "Retrying playback with local file: ${song.localFilePath}")
+                            initMediaPlayer(song.localFilePath, song, attempt = 1)
                         } else {
                             _isBuffering.value = false
                             _isPlaying.value = false
+                            _playbackErrorMessage.value = "No se pudo reproducir '${song.title}'. El enlace o archivo no está disponible (Error $what)."
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error in retry: ${e.message}")
+                        Log.e(TAG, "Error in playback error handler: ${e.message}")
                         _isBuffering.value = false
                         _isPlaying.value = false
+                        _playbackErrorMessage.value = "Error al reproducir '${song.title}'."
                     }
                 }
                 true
@@ -226,14 +249,12 @@ class AudioPlayerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "initMediaPlayer failed for $urlToPlay (attempt $attempt): ${e.message}")
             scope.launch {
-                if (attempt == 0) {
-                    initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM, song, attempt = 1)
-                } else if (attempt == 1) {
-                    initMediaPlayer(YoutubeAudioConverter.DEFAULT_WORSHIP_STREAM_2, song, attempt = 2)
+                if (attempt == 0 && song.localFilePath.isNotEmpty() && File(song.localFilePath).exists() && urlToPlay != song.localFilePath) {
+                    initMediaPlayer(song.localFilePath, song, attempt = 1)
                 } else {
                     _isBuffering.value = false
                     _isPlaying.value = false
-                    _duration.value = (song.durationSeconds * 1000L).coerceAtLeast(60000L)
+                    _playbackErrorMessage.value = "No se pudo reproducir '${song.title}': ${e.localizedMessage ?: "Recurso no accesible"}"
                 }
             }
         }

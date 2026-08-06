@@ -152,7 +152,9 @@ class MusicRepository(private val context: Context) {
                     finalSong = finalSong.copy(
                         audioUrl = res.cloudinaryAudioUrl,
                         coverUrl = if (finalSong.coverUrl.isBlank() || finalSong.coverUrl.contains("unsplash")) res.cloudinaryCoverUrl else finalSong.coverUrl,
-                        durationSeconds = res.durationSeconds
+                        durationSeconds = res.durationSeconds,
+                        localFilePath = res.localFilePath,
+                        isDownloaded = res.localFilePath.isNotBlank()
                     )
                 }
             } catch (e: Exception) {

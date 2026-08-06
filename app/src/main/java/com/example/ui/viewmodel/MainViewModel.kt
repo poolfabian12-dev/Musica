@@ -31,6 +31,7 @@ sealed class YoutubeConversionState {
     data class Error(val message: String) : YoutubeConversionState()
 }
 
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = MusicRepository(application)
@@ -131,6 +132,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch {
             repository.initializeDefaultData()
+        }
+        viewModelScope.launch {
+            playerManager.playbackErrorMessage.collect { err ->
+                if (!err.isNullOrBlank()) {
+                    _userMessage.value = err
+                    playerManager.clearPlaybackError()
+                }
+            }
         }
     }
 
